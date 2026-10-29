@@ -1,0 +1,16 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go-library:
+    uses: govengers/.github/.github/workflows/go-library.yml@v1
+    permissions:
+      contents: write # the badges job pushes test and coverage badges to the badges branch

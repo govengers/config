@@ -132,3 +132,12 @@ fabric.properties
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/go,visualstudiocode,goland+all
+
+# just recipes write test reports here
+sandbox/
+
+# local configuration and keys
+.env
+*.env
+*.pem
+*.key
