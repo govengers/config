@@ -71,12 +71,20 @@ func main() {
 | `config.Int(name)` | an integer | `Default`, `Sensitive`, `Into(*int)` |
 
 - A value without `Default` is required.
-- `NotEmpty` rejects an empty value and an empty default.
-- `Sensitive` masks the value in `Print` with a fixed `****`, so not even its length shows.
+- `NotEmpty` rejects an empty or whitespace-only value and an empty default.
+- `Sensitive` masks the value in `Print` with a fixed `****`, so not even its length shows, and keeps it out of every error `LoadConfig` and `BindPFlag` return.
 
-`config.Print()` writes the table to stdout, `config.Fprint(writer)` anywhere else and returns the write error:
+`config.Print()` writes the table to stdout (in color), `config.Fprint(writer)` anywhere else and returns the write error. Control characters in values are dropped:
 
-![config.Print()](./images/configuration_printout.png)
+```
+ Application Configuration
+ ENV VAR          TYPE          DEFAULT VALUE          VALUE PROVIDED  CURRENT VALUE
+ ALLOWED_ORIGINS  string array  http://localhost:9000  false           http://localhost:9000
+ DATABASE_URL     string        -                      true            ****
+ DEV_MODE         bool          false                  false           false
+ LOG_LEVEL        string        info                   false           info
+ PORT             int           8080                   true            9000
+```
 
 ### Reading by key
 
@@ -98,7 +106,12 @@ err := config.LoadConfigWithOptions(values, &config.LoadConfigOptions{
 })
 ```
 
-A variable already set in the environment wins over every file, and an earlier file wins over a later one. A file that exists but cannot be read or parsed is an error. The files are validated together with everything else: only after a successful load does `LoadConfig` set their variables in the process environment, for other code that reads it.
+A variable already set in the environment wins over every file, and an earlier file wins over a later one. A file that exists but cannot be read or parsed is an error. The files are validated together with everything else: only after a successful load does `LoadConfig` set their variables, declared or not, in the process environment, for other code that reads it.
+
+- Only regular files of at most 1 MiB are read; symlinks are followed, so a dotenv file mounted from a Kubernetes Secret works.
+- A syntax error names the file but not its content, because the content holds secrets.
+- In unquoted and double-quoted values, `$NAME` and `${NAME}` expand to earlier keys of the same file; quote secrets with single quotes.
+- `DisableDotEnv: true` reads no file at all. Use it in production when the configuration comes from the environment only: a `.env` in the working directory can set any variable of the process, so that directory must not be writable by anyone but the operator.
 
 ### Command line flags
 
@@ -126,6 +139,7 @@ if err := config.BindPFlag("PORT", flags.Lookup("port")); err != nil {
 | v1 | v2 |
 |----|----|
 | `NotEmpty().Default("")` silently allowed an empty value | an error at load: drop `NotEmpty` if the value is optional |
+| invalid values were quoted in errors, secrets included | a `Sensitive` value never appears in an error; dotenv syntax errors no longer quote the file |
 | `LoadConfig` stopped at the first problem and left partial state | reports every problem at once; on failure nothing changes, the process environment included |
 | `BindPFlag` applied a flag's default even when the flag was not set, and panicked | applies only set flags, supports `StringArray`, enforces `NotEmpty`, returns an error |
 | a missing first dotenv file stopped the later ones from loading | missing files are skipped, every existing file is read |

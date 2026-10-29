@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -216,6 +217,62 @@ func TestASuccessfulLoadExportsDotEnvValuesThatAreNotSetYet(t *testing.T) {
 	require.Equal(t, "from-dotenv", os.Getenv("CONFIG_TEST_DOTENV_NAME"))
 	require.Equal(t, "also-exported", os.Getenv("CONFIG_TEST_DOTENV_UNDECLARED"))
 	require.Equal(t, "9090", os.Getenv("CONFIG_TEST_DOTENV_PORT"))
+}
+
+func TestADotEnvSyntaxErrorDoesNotRevealFileContent(t *testing.T) {
+	directory := t.TempDir()
+	testCases := map[string]string{
+		"multi-line key":  "FIRST=ok\nTLS_KEY=-----BEGIN PRIVATE KEY-----\nMIIBdummybody\n-----END PRIVATE KEY-----\nDB_PASSWORD=dummy-dotenv-secret\n",
+		"byte order mark": "\xEF\xBB\xBFFIRST=dummy-first-secret\nDB_PASSWORD=dummy-dotenv-secret\n",
+		"unterminated":    "DB_PASSWORD=\"dummy-dotenv-secret\n",
+	}
+	for name, content := range testCases {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(directory, strings.ReplaceAll(name, " ", "-")+".env")
+			writeFile(t, path, content)
+
+			err := LoadConfigWithOptions([]Value{String("DB_PASSWORD").Sensitive()}, &LoadConfigOptions{DotEnvFiles: []string{path}})
+
+			require.ErrorIs(t, err, ErrInvalid)
+			require.ErrorContains(t, err, "invalid dotenv syntax")
+			for _, secret := range []string{"dummy-dotenv-secret", "dummy-first-secret", "MIIBdummybody"} {
+				require.NotContains(t, err.Error(), secret)
+			}
+		})
+	}
+}
+
+func TestOversizedDotEnvFilesAreRejected(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "huge.env")
+	writeFile(t, path, "VALUE="+strings.Repeat("x", maximumDotEnvFileSize)+"\n")
+
+	err := LoadConfigWithOptions([]Value{}, &LoadConfigOptions{DotEnvFiles: []string{path}})
+
+	require.ErrorIs(t, err, ErrInvalid)
+	require.ErrorContains(t, err, "larger than")
+}
+
+func TestASymlinkedDotEnvFileIsRead(t *testing.T) {
+	directory := t.TempDir()
+	writeFile(t, filepath.Join(directory, "mounted.env"), "CONFIG_TEST_DOTENV_NAME=from-mount\n")
+	require.NoError(t, os.Symlink(filepath.Join(directory, "mounted.env"), filepath.Join(directory, "link.env")))
+	t.Cleanup(func() { _ = os.Unsetenv("CONFIG_TEST_DOTENV_NAME") }) // exported by the load under test
+
+	require.NoError(t, LoadConfigWithOptions([]Value{String("CONFIG_TEST_DOTENV_NAME")},
+		&LoadConfigOptions{DotEnvFiles: []string{filepath.Join(directory, "link.env")}}))
+
+	require.Equal(t, "from-mount", Get().String("CONFIG_TEST_DOTENV_NAME"))
+}
+
+func TestDisableDotEnvReadsNoFile(t *testing.T) {
+	directory := t.TempDir()
+	t.Chdir(directory)
+	writeFile(t, filepath.Join(directory, ".env"), "CONFIG_TEST_DOTENV_NAME=from-dotenv\n")
+
+	err := LoadConfigWithOptions([]Value{String("CONFIG_TEST_DOTENV_NAME")}, &LoadConfigOptions{DisableDotEnv: true})
+
+	require.ErrorIs(t, err, ErrMissing)
+	require.Equal(t, []string(nil), dotEnvFiles(&LoadConfigOptions{DisableDotEnv: true, DotEnvFiles: []string{"a.env"}}))
 }
 
 func TestAnUnreadableDotEnvFileFails(t *testing.T) {

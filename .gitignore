@@ -135,3 +135,9 @@ fabric.properties
 
 # just recipes write test reports here
 sandbox/
+
+# local configuration and keys
+.env
+*.env
+*.pem
+*.key

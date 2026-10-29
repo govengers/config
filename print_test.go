@@ -62,6 +62,11 @@ func TestFprintReturnsTheWriteError(t *testing.T) {
 	require.EqualError(t, Fprint(failingWriter{}), "disk full")
 }
 
+func TestFormatDropsControlCharacters(t *testing.T) {
+	require.Equal(t, "a[31mbc", format("a\x1b[31mb\nc"))
+	require.Equal(t, "x, y", format([]string{"x", "y\r"}))
+}
+
 func TestTruncate(t *testing.T) {
 	short := strings.Repeat("a", maximumDisplayLength)
 	long := strings.Repeat("ä", maximumDisplayLength+1)

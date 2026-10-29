@@ -56,7 +56,7 @@ func resolve(current declaration, lookup func(key string) (string, bool)) (*entr
 	}
 	value, err := parse(current.valueType, raw)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", current.environmentVariable, err)
+		return nil, fmt.Errorf("%s: %w", current.environmentVariable, describeParseError(current, raw, err))
 	}
 	if current.notEmpty && isEmpty(value) {
 		return nil, fmt.Errorf("%s must not be empty: %w", current.environmentVariable, ErrInvalid)
@@ -131,22 +131,32 @@ func parseBool(raw string) (bool, error) {
 	case "false":
 		return false, nil
 	default:
-		return false, fmt.Errorf("%q is neither true nor false: %w", raw, ErrInvalid)
+		return false, fmt.Errorf("is neither true nor false: %w", ErrInvalid)
 	}
 }
 
 func parseInt(raw string) (int, error) {
 	value, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, fmt.Errorf("%q is not an integer: %w", raw, ErrInvalid)
+		return 0, fmt.Errorf("is not an integer: %w", ErrInvalid)
 	}
 	return value, nil
 }
 
+// describeParseError names the rejected value only when it is not Sensitive, so a malformed secret
+// never reaches the startup error and the logs that collect it.
+func describeParseError(current declaration, raw string, err error) error {
+	if current.sensitive {
+		return fmt.Errorf("the value (sensitive, not shown) %w", err)
+	}
+	return fmt.Errorf("%q %w", raw, err)
+}
+
+// isEmpty treats a value of only whitespace as empty: it is always a mistake for a NotEmpty value.
 func isEmpty(value any) bool {
 	switch typed := value.(type) {
 	case string:
-		return typed == ""
+		return strings.TrimSpace(typed) == ""
 	case []string:
 		return len(typed) == 0
 	default:

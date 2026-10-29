@@ -18,6 +18,8 @@ type LoadConfigOptions struct {
 	DotEnvFile string
 	// DotEnvFiles are read in order. A missing file is skipped; without any file, ".env" is read if it exists.
 	DotEnvFiles []string
+	// DisableDotEnv reads no dotenv file at all, not even ".env" in the working directory.
+	DisableDotEnv bool
 }
 
 // LoadConfig loads values from the environment and from a ".env" file in the working directory, if

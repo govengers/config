@@ -59,6 +59,27 @@ func TestBindPFlagEnforcesNotEmpty(t *testing.T) {
 	require.Equal(t, "from-default", Get().String("CONFIG_TEST_NAME"))
 }
 
+func TestBindPFlagHidesASensitiveValue(t *testing.T) {
+	require.NoError(t, LoadConfig([]Value{Int("CONFIG_TEST_PIN").Default(0).Sensitive()}))
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.String("pin-text", "", "")
+	require.NoError(t, flags.Parse([]string{"--pin-text=4711x"}))
+
+	err := BindPFlag("CONFIG_TEST_PIN", flags.Lookup("pin-text"))
+
+	require.ErrorIs(t, err, ErrInvalid)
+	require.NotContains(t, err.Error(), "4711")
+}
+
+func TestBindPFlagParsesListFlagsLikeTheEnvironment(t *testing.T) {
+	var configuration testConfiguration
+	require.NoError(t, LoadConfig(testValues(&configuration)))
+
+	require.NoError(t, BindPFlag("CONFIG_TEST_ORIGINS", parsedFlags(t, "--origins= https://a.example , ,https://b.example").Lookup("origins")))
+
+	require.Equal(t, []string{"https://a.example", "https://b.example"}, configuration.Origins)
+}
+
 func TestBindPFlagIgnoresANilFlag(t *testing.T) {
 	require.NoError(t, BindPFlag("CONFIG_TEST_ANYTHING", nil))
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 )
@@ -65,11 +66,19 @@ func display(current declaration, value any) string {
 	return truncate(format(value))
 }
 
+// format renders a value for the table and drops control characters, so a value cannot inject
+// terminal escape sequences or extra lines into logs.
 func format(value any) string {
+	text := fmt.Sprint(value)
 	if items, isList := value.([]string); isList {
-		return strings.Join(items, ", ")
+		text = strings.Join(items, ", ")
 	}
-	return fmt.Sprint(value)
+	return strings.Map(func(character rune) rune {
+		if unicode.IsControl(character) {
+			return -1
+		}
+		return character
+	}, text)
 }
 
 func truncate(text string) string {

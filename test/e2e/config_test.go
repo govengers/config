@@ -178,3 +178,16 @@ func TestAFlagOverridesTheEnvironmentOnlyWhenSet(t *testing.T) {
 	require.Equal(t, 9100, withFlag.configuration.Port)
 	require.Equal(t, 9000, withoutFlag.configuration.Port)
 }
+
+func TestADotEnvSyntaxErrorKeepsTheFileContentOutOfStderr(t *testing.T) {
+	directory := t.TempDir()
+	content := "DATABASE_URL=postgres://billing:dummy-secret@db/billing\nTLS_KEY=-----BEGIN PRIVATE KEY-----\nMIIBdummybody\n"
+	require.NoError(t, os.WriteFile(filepath.Join(directory, "broken.env"), []byte(content), 0o600))
+
+	outcome := runApp(t, directory, nil, "--dotenv-file=broken.env")
+
+	require.Equal(t, 1, outcome.exitCode)
+	require.Contains(t, outcome.stderr, "load dotenv file broken.env: invalid dotenv syntax")
+	require.NotContains(t, outcome.stderr, "dummy-secret")
+	require.NotContains(t, outcome.stderr, "MIIBdummybody")
+}

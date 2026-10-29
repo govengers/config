@@ -65,14 +65,14 @@ func (r *Registry) find(key string, expected valueType) (*entry, error) {
 	return found, nil
 }
 
-func (r *Registry) typeOf(key string) (valueType, error) {
+func (r *Registry) declarationOf(key string) (declaration, error) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	found, declared := r.entries[key]
 	if !declared {
-		return "", fmt.Errorf("config: %s was never declared", key)
+		return declaration{}, fmt.Errorf("config: %s was never declared", key)
 	}
-	return found.declaration.valueType, nil
+	return found.declaration, nil
 }
 
 // replace swaps in the loaded entries and writes every Into target, under one lock.

@@ -120,6 +120,32 @@ func TestIntoANilPointerFailsBeforeAnyTargetChanges(t *testing.T) {
 	require.Equal(t, "unchanged", name)
 }
 
+func TestASensitiveValueNeverAppearsInAnError(t *testing.T) {
+	t.Setenv("CONFIG_TEST_PIN", "4711\n")
+	t.Setenv("CONFIG_TEST_SECRET_FLAG", "maybe-4712")
+	t.Setenv("CONFIG_TEST_PORT", "eighty")
+
+	err := LoadConfig([]Value{
+		Int("CONFIG_TEST_PIN").Sensitive(),
+		Bool("CONFIG_TEST_SECRET_FLAG").Sensitive(),
+		Int("CONFIG_TEST_PORT"),
+	})
+
+	require.ErrorIs(t, err, ErrInvalid)
+	require.NotContains(t, err.Error(), "4711")
+	require.NotContains(t, err.Error(), "4712")
+	require.ErrorContains(t, err, "CONFIG_TEST_PIN: the value (sensitive, not shown) is not an integer")
+	require.ErrorContains(t, err, `CONFIG_TEST_PORT: "eighty" is not an integer`)
+}
+
+func TestNotEmptyRejectsWhitespaceOnlyValues(t *testing.T) {
+	t.Setenv("CONFIG_TEST_NAME", "  \t ")
+
+	err := LoadConfig([]Value{String("CONFIG_TEST_NAME").NotEmpty()})
+
+	require.ErrorIs(t, err, ErrInvalid)
+}
+
 func TestADuplicateDeclarationFails(t *testing.T) {
 	t.Setenv("CONFIG_TEST_TWICE", "value")
 

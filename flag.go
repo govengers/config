@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"slices"
+	"strings"
 
 	"github.com/spf13/pflag"
 )
@@ -13,20 +13,25 @@ func BindPFlag(key string, flag *pflag.Flag) error {
 	if flag == nil || !flag.Changed {
 		return nil
 	}
-	expected, err := registry.typeOf(key)
+	current, err := registry.declarationOf(key)
 	if err != nil {
 		return err
 	}
-	value, err := parseFlag(expected, flag)
+	value, err := parseFlag(current, flag)
 	if err != nil {
 		return fmt.Errorf("flag --%s for %s: %w", flag.Name, key, err)
 	}
-	return registry.update(key, expected, value, true)
+	return registry.update(key, current.valueType, value, true)
 }
 
-func parseFlag(expected valueType, flag *pflag.Flag) (any, error) {
-	if sliceValue, isSlice := flag.Value.(pflag.SliceValue); isSlice && expected == stringArrayType {
-		return slices.Clone(sliceValue.GetSlice()), nil
+func parseFlag(current declaration, flag *pflag.Flag) (any, error) {
+	if sliceValue, isSlice := flag.Value.(pflag.SliceValue); isSlice && current.valueType == stringArrayType {
+		return parseStringArray(strings.Join(sliceValue.GetSlice(), ",")), nil
 	}
-	return parse(expected, flag.Value.String())
+	raw := flag.Value.String()
+	value, err := parse(current.valueType, raw)
+	if err != nil {
+		return nil, describeParseError(current, raw, err)
+	}
+	return value, nil
 }
