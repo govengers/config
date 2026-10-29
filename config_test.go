@@ -114,11 +114,15 @@ func TestSetUpdatesTheValueAndTheBoundField(t *testing.T) {
 	require.Equal(t, 1234, Get().Int("CONFIG_TEST_PORT"))
 }
 
-func TestSetPanicsOnAnUndeclaredKeyOrTheWrongType(t *testing.T) {
-	require.NoError(t, LoadConfig([]Value{String("CONFIG_TEST_NAME").Default("x")}))
+func TestSetPanicsOnAnUndeclaredKeyTheWrongTypeOrAnEmptyNotEmptyValue(t *testing.T) {
+	require.NoError(t, LoadConfig([]Value{
+		String("CONFIG_TEST_NAME").Default("x"),
+		StringArray("CONFIG_TEST_ORIGINS").NotEmpty().Default([]string{"https://a.example"}),
+	}))
 
 	require.Panics(t, func() { Set().String("CONFIG_TEST_TYPO", "x") })
 	require.Panics(t, func() { Set().Bool("CONFIG_TEST_NAME", true) })
+	require.PanicsWithError(t, "config: CONFIG_TEST_ORIGINS must not be empty: invalid", func() { Set().StringArray("CONFIG_TEST_ORIGINS", " , ") })
 }
 
 func TestConcurrentReadsAndWrites(t *testing.T) {
@@ -181,6 +185,37 @@ func TestMissingDotEnvFilesAreSkippedAndTheFirstFileWins(t *testing.T) {
 
 	require.Equal(t, "first", Get().String("CONFIG_TEST_DOTENV_NAME"))
 	require.Equal(t, 7070, Get().Int("CONFIG_TEST_DOTENV_PORT"))
+}
+
+func TestAFailedLoadLeavesTheProcessEnvironmentUntouched(t *testing.T) {
+	directory := t.TempDir()
+	writeFile(t, filepath.Join(directory, "app.env"), "CONFIG_TEST_DOTENV_NAME=from-dotenv\n")
+
+	err := LoadConfigWithOptions([]Value{
+		String("CONFIG_TEST_DOTENV_NAME"),
+		String("CONFIG_TEST_MISSING"),
+	}, &LoadConfigOptions{DotEnvFiles: []string{filepath.Join(directory, "app.env")}})
+
+	require.ErrorIs(t, err, ErrMissing)
+	_, present := os.LookupEnv("CONFIG_TEST_DOTENV_NAME")
+	require.False(t, present)
+}
+
+func TestASuccessfulLoadExportsDotEnvValuesThatAreNotSetYet(t *testing.T) {
+	directory := t.TempDir()
+	writeFile(t, filepath.Join(directory, "app.env"), "CONFIG_TEST_DOTENV_NAME=from-dotenv\nCONFIG_TEST_DOTENV_UNDECLARED=also-exported\nCONFIG_TEST_DOTENV_PORT=1111\n")
+	t.Setenv("CONFIG_TEST_DOTENV_PORT", "9090")
+	t.Cleanup(func() {
+		_ = os.Unsetenv("CONFIG_TEST_DOTENV_NAME") // set by the load under test
+		_ = os.Unsetenv("CONFIG_TEST_DOTENV_UNDECLARED")
+	})
+
+	require.NoError(t, LoadConfigWithOptions([]Value{String("CONFIG_TEST_DOTENV_NAME")},
+		&LoadConfigOptions{DotEnvFiles: []string{filepath.Join(directory, "app.env")}}))
+
+	require.Equal(t, "from-dotenv", os.Getenv("CONFIG_TEST_DOTENV_NAME"))
+	require.Equal(t, "also-exported", os.Getenv("CONFIG_TEST_DOTENV_UNDECLARED"))
+	require.Equal(t, "9090", os.Getenv("CONFIG_TEST_DOTENV_PORT"))
 }
 
 func TestAnUnreadableDotEnvFileFails(t *testing.T) {

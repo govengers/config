@@ -48,6 +48,17 @@ func TestBindPFlagKeepsTheEnvironmentValueWhenTheFlagIsNotSet(t *testing.T) {
 	require.Equal(t, "from-environment", configuration.Name)
 }
 
+func TestBindPFlagEnforcesNotEmpty(t *testing.T) {
+	name := ""
+	require.NoError(t, LoadConfig([]Value{String("CONFIG_TEST_NAME").NotEmpty().Default("from-default").Into(&name)}))
+
+	err := BindPFlag("CONFIG_TEST_NAME", parsedFlags(t, "--name=").Lookup("name"))
+
+	require.ErrorIs(t, err, ErrInvalid)
+	require.Equal(t, "from-default", name)
+	require.Equal(t, "from-default", Get().String("CONFIG_TEST_NAME"))
+}
+
 func TestBindPFlagIgnoresANilFlag(t *testing.T) {
 	require.NoError(t, BindPFlag("CONFIG_TEST_ANYTHING", nil))
 }

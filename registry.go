@@ -75,19 +75,27 @@ func (r *Registry) typeOf(key string) (valueType, error) {
 	return found.declaration.valueType, nil
 }
 
+// replace swaps in the loaded entries and writes every Into target, under one lock.
 func (r *Registry) replace(entries map[string]*entry) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	r.entries = entries
+	for _, loaded := range entries {
+		loaded.writeTarget()
+	}
 }
 
-// update sets the value of key and writes it into the bound field.
+// update sets the value of key and writes it into the bound field. It applies the same NotEmpty
+// rule as LoadConfig, so no path can store an empty value for a NotEmpty declaration.
 func (r *Registry) update(key string, expected valueType, value any, provided bool) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	found, err := r.find(key, expected)
 	if err != nil {
 		return err
+	}
+	if found.declaration.notEmpty && isEmpty(value) {
+		return fmt.Errorf("config: %s must not be empty: %w", key, ErrInvalid)
 	}
 	found.value = value
 	found.provided = found.provided || provided
@@ -98,8 +106,8 @@ func (r *Registry) update(key string, expected valueType, value any, provided bo
 // Setter changes loaded values, for tests. Set returns it.
 type Setter struct{}
 
-// Set returns the Setter. Its methods panic on a key that was never declared or that was declared
-// with another type, like the getters of Get.
+// Set returns the Setter. Its methods panic on a key that was never declared, that was declared
+// with another type, or on an empty value for a NotEmpty declaration.
 func Set() *Setter {
 	return &Setter{}
 }

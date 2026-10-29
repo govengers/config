@@ -97,6 +97,29 @@ func TestNotEmptyRejectsAnEmptyDefault(t *testing.T) {
 	require.ErrorContains(t, err, "CONFIG_TEST_UNSET_LIST is NotEmpty but its default is empty")
 }
 
+func TestNotEmptyRejectsAnEmptyDefaultEvenWhenTheVariableIsSet(t *testing.T) {
+	t.Setenv("CONFIG_TEST_NAME", "set")
+
+	err := LoadConfig([]Value{String("CONFIG_TEST_NAME").NotEmpty().Default("")})
+
+	require.ErrorIs(t, err, ErrInvalid)
+	require.ErrorContains(t, err, "CONFIG_TEST_NAME is NotEmpty but its default is empty")
+}
+
+func TestIntoANilPointerFailsBeforeAnyTargetChanges(t *testing.T) {
+	name := "unchanged"
+	var nilTarget *int
+
+	err := LoadConfig([]Value{
+		String("CONFIG_TEST_NAME").Default("loaded").Into(&name),
+		Int("CONFIG_TEST_PORT").Default(8080).Into(nilTarget),
+	})
+
+	require.ErrorIs(t, err, ErrInvalid)
+	require.ErrorContains(t, err, "CONFIG_TEST_PORT is bound with Into to a nil pointer")
+	require.Equal(t, "unchanged", name)
+}
+
 func TestADuplicateDeclarationFails(t *testing.T) {
 	t.Setenv("CONFIG_TEST_TWICE", "value")
 

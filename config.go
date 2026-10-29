@@ -27,21 +27,24 @@ func LoadConfig(values []Value) error {
 }
 
 // LoadConfigWithOptions reads the dotenv files, resolves every value and, when all of them are
-// valid, replaces the registry and writes each value into its Into target. Otherwise it returns an
-// error naming every missing or invalid value, and neither the registry nor any target changes.
+// valid, replaces the registry, writes each value into its Into target and sets the dotenv
+// variables the process environment does not have yet, so other code in the process sees them too.
+// Otherwise it returns an error naming every missing or invalid value, and neither the registry,
+// any target nor the process environment changes.
 //
 // A variable that is already set in the environment wins over the dotenv files, and an earlier
 // dotenv file wins over a later one.
 func LoadConfigWithOptions(values []Value, options *LoadConfigOptions) error {
-	if err := loadDotEnvFiles(dotEnvFiles(options)); err != nil {
-		return err
-	}
-	entries, err := resolveAll(values)
+	staged, err := readDotEnvFiles(dotEnvFiles(options))
 	if err != nil {
 		return err
 	}
-	for _, loaded := range entries {
-		loaded.writeTarget()
+	entries, err := resolveAll(values, environmentWith(staged))
+	if err != nil {
+		return err
+	}
+	if err := exportDotEnvValues(staged); err != nil {
+		return err
 	}
 	registry.replace(entries)
 	return nil

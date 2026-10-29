@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,7 +22,7 @@ type entry struct {
 
 // resolveAll resolves every value and returns all problems at once, so one failed start shows the
 // whole list of what to fix.
-func resolveAll(values []Value) (map[string]*entry, error) {
+func resolveAll(values []Value, lookup func(key string) (string, bool)) (map[string]*entry, error) {
 	entries := make(map[string]*entry, len(values))
 	declared := make(map[string]bool, len(values))
 	var problems []error
@@ -34,7 +33,7 @@ func resolveAll(values []Value) (map[string]*entry, error) {
 			continue
 		}
 		declared[current.environmentVariable] = true
-		resolved, err := resolve(current)
+		resolved, err := resolve(current, lookup)
 		if err != nil {
 			problems = append(problems, err)
 			continue
@@ -47,8 +46,11 @@ func resolveAll(values []Value) (map[string]*entry, error) {
 	return entries, nil
 }
 
-func resolve(current declaration) (*entry, error) {
-	raw, provided := os.LookupEnv(current.environmentVariable)
+func resolve(current declaration, lookup func(key string) (string, bool)) (*entry, error) {
+	if err := checkDeclaration(current); err != nil {
+		return nil, err
+	}
+	raw, provided := lookup(current.environmentVariable)
 	if !provided {
 		return resolveDefault(current)
 	}
@@ -62,14 +64,37 @@ func resolve(current declaration) (*entry, error) {
 	return &entry{declaration: current, value: value, provided: true}, nil
 }
 
+// checkDeclaration rejects declarations that contradict themselves, whatever the environment holds.
+func checkDeclaration(current declaration) error {
+	if current.notEmpty && current.defaultValue != nil && isEmpty(current.defaultValue) {
+		return fmt.Errorf("%s is NotEmpty but its default is empty: %w", current.environmentVariable, ErrInvalid)
+	}
+	if hasNilTarget(current.target) {
+		return fmt.Errorf("%s is bound with Into to a nil pointer: %w", current.environmentVariable, ErrInvalid)
+	}
+	return nil
+}
+
 func resolveDefault(current declaration) (*entry, error) {
 	if current.defaultValue == nil {
 		return nil, fmt.Errorf("%s is not set and has no default: %w", current.environmentVariable, ErrMissing)
 	}
-	if current.notEmpty && isEmpty(current.defaultValue) {
-		return nil, fmt.Errorf("%s is NotEmpty but its default is empty: %w", current.environmentVariable, ErrInvalid)
-	}
 	return &entry{declaration: current, value: copyValue(current.defaultValue)}, nil
+}
+
+func hasNilTarget(target any) bool {
+	switch typed := target.(type) {
+	case *string:
+		return typed == nil
+	case *[]string:
+		return typed == nil
+	case *bool:
+		return typed == nil
+	case *int:
+		return typed == nil
+	default:
+		return false
+	}
 }
 
 func parse(kind valueType, raw string) (any, error) {

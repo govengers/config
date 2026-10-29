@@ -7,8 +7,10 @@ coverage_threshold := "80"
 default:
     @just --list
 
-# Lint with the govengers baseline (.golangci.yml, copied from govengers/standards)
+# Vet and lint with the govengers baseline (.golangci.yml, copied from govengers/standards)
 lint:
+    go vet ./...
+    go vet -tags e2e ./test/e2e/...
     golangci-lint run ./...
 
 # Unit tests with the race detector; fails below the coverage threshold

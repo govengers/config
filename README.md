@@ -24,7 +24,11 @@ Declare every value once and bind it into a struct with `Into`:
 ```go
 package main
 
-import "github.com/govengers/config/v2"
+import (
+	"log"
+
+	"github.com/govengers/config/v2"
+)
 
 type Configuration struct {
 	LogLevel       string
@@ -55,7 +59,7 @@ func main() {
 		panic(err) // every missing or invalid value, in one error
 	}
 	config.Print()
-	// copy configuration fields into the options of your components
+	log.Printf("listening on :%d", configuration.Port) // copy fields into the options of your components
 }
 ```
 
@@ -70,7 +74,7 @@ func main() {
 - `NotEmpty` rejects an empty value and an empty default.
 - `Sensitive` masks the value in `Print` with a fixed `****`, so not even its length shows.
 
-`config.Print()` writes the table to stdout, `config.Fprint(writer)` anywhere else:
+`config.Print()` writes the table to stdout, `config.Fprint(writer)` anywhere else and returns the write error:
 
 ![config.Print()](./images/configuration_printout.png)
 
@@ -94,7 +98,7 @@ err := config.LoadConfigWithOptions(values, &config.LoadConfigOptions{
 })
 ```
 
-A variable already set in the environment wins over every file, and an earlier file wins over a later one. A file that exists but cannot be read or parsed is an error.
+A variable already set in the environment wins over every file, and an earlier file wins over a later one. A file that exists but cannot be read or parsed is an error. The files are validated together with everything else: only after a successful load does `LoadConfig` set their variables in the process environment, for other code that reads it.
 
 ### Command line flags
 
@@ -122,8 +126,8 @@ if err := config.BindPFlag("PORT", flags.Lookup("port")); err != nil {
 | v1 | v2 |
 |----|----|
 | `NotEmpty().Default("")` silently allowed an empty value | an error at load: drop `NotEmpty` if the value is optional |
-| `LoadConfig` stopped at the first problem and left partial state | reports every problem at once; on failure nothing changes |
-| `BindPFlag` applied a flag's default even when the flag was not set, and panicked | applies only set flags, supports `StringArray`, returns an error |
+| `LoadConfig` stopped at the first problem and left partial state | reports every problem at once; on failure nothing changes, the process environment included |
+| `BindPFlag` applied a flag's default even when the flag was not set, and panicked | applies only set flags, supports `StringArray`, enforces `NotEmpty`, returns an error |
 | a missing first dotenv file stopped the later ones from loading | missing files are skipped, every existing file is read |
 | `" a, ,b"` parsed to `["a", "", "b"]` | parses to `["a", "b"]` |
 | the library logged `.env` status with the standard logger | silent |

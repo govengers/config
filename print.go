@@ -18,18 +18,18 @@ const (
 
 // Print writes a table of all loaded values to stdout. Sensitive values are masked.
 func Print() {
-	Fprint(os.Stdout)
+	_ = Fprint(os.Stdout) // a failed write to stdout has nowhere else to be reported
 }
 
-// Fprint writes the table Print writes to writer.
-func Fprint(writer io.Writer) {
+// Fprint writes the table Print writes to writer and returns the write error, if any.
+func Fprint(writer io.Writer) error {
 	tableWriter := table.NewWriter()
 	tableWriter.SetTitle("Application Configuration")
-	tableWriter.SetOutputMirror(writer)
 	tableWriter.AppendHeader(table.Row{"ENV VAR", "Type", "Default Value", "Value Provided", "Current Value"})
 	tableWriter.AppendRows(registry.rows())
 	tableWriter.SetStyle(table.StyleColoredYellowWhiteOnBlack)
-	tableWriter.Render()
+	_, err := io.WriteString(writer, tableWriter.Render()+"\n")
+	return err
 }
 
 func (r *Registry) rows() []table.Row {

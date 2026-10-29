@@ -54,6 +54,8 @@ func run(arguments []string) error {
 		_ = config.Get().String("NOT_DECLARED") // panics: the key was never declared
 	}
 
-	config.Fprint(os.Stderr)
+	if err := config.Fprint(os.Stderr); err != nil {
+		return err
+	}
 	return json.NewEncoder(os.Stdout).Encode(configuration)
 }

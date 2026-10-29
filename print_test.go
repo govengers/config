@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 func printed(t *testing.T) string {
 	t.Helper()
 	var output bytes.Buffer
-	Fprint(&output)
+	require.NoError(t, Fprint(&output))
 	return output.String()
 }
 
@@ -49,6 +50,16 @@ func TestPrintShowsTypesDefaultsAndWhetherAValueWasProvided(t *testing.T) {
 	require.Contains(t, output, "true")
 	require.Contains(t, output, "false")
 	require.Less(t, strings.Index(output, "CONFIG_TEST_ORIGINS"), strings.Index(output, "CONFIG_TEST_PORT"))
+}
+
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("disk full") }
+
+func TestFprintReturnsTheWriteError(t *testing.T) {
+	require.NoError(t, LoadConfig([]Value{Int("CONFIG_TEST_PORT").Default(8080)}))
+
+	require.EqualError(t, Fprint(failingWriter{}), "disk full")
 }
 
 func TestTruncate(t *testing.T) {
