@@ -1,0 +1,91 @@
+# govengers lint baseline (golangci-lint v2). Copy into a repo, extend, never weaken without a reason.
+version: "2"
+
+run:
+  build-tags: [e2e] # TST-011: lint the end-to-end suite too
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose         # RES: unclosed HTTP response bodies
+    - containedctx      # CON-002: no context.Context in struct fields
+    - copyloopvar       # TCH-001: leftover `x := x` copies, redundant since Go 1.22
+    - errorlint         # ERR-002: errors.Is / errors.As instead of == and type assertions
+    - errname           # ERR-005: ErrX sentinels, XError types
+    - exhaustive        # DES-009: switches over typed constants cover every case
+    - fatcontext        # CON-002: context re-wrapped in a loop, growing without bound
+    - funlen            # FUN-004: long functions do several things
+    - gochecknoinits    # DES-002: no init()
+    - gocognit          # FUN-004: hard-to-follow control flow
+    - gocritic
+    - gosec             # incl. G112/G114 (LAY-006), G108 (OBS-003)
+    - nilerr            # ERR-006: returns nil although err != nil was checked
+    - misspell
+    - nestif            # FUN-004: deeply nested ifs
+    - noctx             # RES-001: outbound requests carry a context
+    - nolintlint        # TCH-004: //nolint names the linter and gives a reason
+    - revive            # NAM: naming, initialisms, stutter, doc comments
+    - sqlclosecheck     # DAT: unclosed pgx / database/sql rows in hand-written queries
+    - unconvert
+    - usestdlibvars     # http.MethodGet, http.StatusOK instead of literals
+    - varnamelen        # NAM-001: single-letter and two-letter names outside the allowed list
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
+    funlen:
+      lines: 60
+      statements: 40
+      ignore-comments: true
+    gocognit:
+      min-complexity: 20
+    nestif:
+      min-complexity: 4
+    varnamelen:
+      max-distance: 1 # the minimum; a short name used on the next line passes, NAM-001 still applies
+      min-name-length: 3
+      check-receiver: false
+      check-return: true
+      check-type-param: false
+      ignore-names: [ctx, err, ok, id, ui, we]
+      ignore-decls:
+        - t *testing.T
+        - b *testing.B
+        - f *testing.F
+        - m *testing.M
+        - tb testing.TB
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: var-naming
+        - name: exported
+        - name: package-comments
+        - name: receiver-naming
+        - name: error-naming
+        - name: error-strings
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: argument-limit      # FUN-004
+          arguments: [5]
+        - name: function-result-limit # FUN-004
+          arguments: [3]
+  exclusions:
+    generated: strict
+    rules:
+      - path: _test\.go
+        linters: [funlen] # table tests are long by design
+      - path: _test\.go
+        linters: [gosec]
+        text: "G101|G204" # fake credentials in fixtures; end-to-end harnesses run the binaries they build
+    presets:
+      - std-error-handling
+    paths:
+      - internal/repository/internal/sqlc
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports

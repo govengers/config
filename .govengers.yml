@@ -1,0 +1,4 @@
+profile: library
+exceptions:
+  - rule: DES-003
+    reason: the registry behind Get and Set is process-wide by design, so main reads values without passing the registry around
