@@ -41,8 +41,9 @@ func TestIntoBindsTheNewTypesFromTheEnvironment(t *testing.T) {
 	require.Equal(t, "debug", configuration.LogLevel)
 	require.Equal(t, 90*time.Minute, Get().Duration("CONFIG_TEST_TIMEOUT"))
 	require.InDelta(t, -0.0025, Get().Float("CONFIG_TEST_RATIO"), 1e-12)
-	readURL := Get().URL("CONFIG_TEST_BASE_URL")
-	require.Equal(t, "api.example:8443", readURL.Host)
+	require.Equal(t, "https://user:pass@api.example:8443/v1?x=1", Get().URL("CONFIG_TEST_BASE_URL").String())
+	Get().URL("CONFIG_TEST_BASE_URL").Host = "changed.example"
+	require.Equal(t, "api.example:8443", Get().URL("CONFIG_TEST_BASE_URL").Host, "the getter returns a copy")
 	require.Equal(t, "debug", Get().Enum("CONFIG_TEST_LOG_LEVEL"))
 }
 
@@ -88,6 +89,7 @@ func TestParseURL(t *testing.T) {
 		"host without scheme":  {raw: "api.example/v1", wantError: ErrInvalid},
 		"host and port only":   {raw: "localhost:8080", wantError: ErrInvalid},
 		"scheme without host":  {raw: "file:///etc/app", wantError: ErrInvalid},
+		"port without host":    {raw: "http://:8080", wantError: ErrInvalid},
 		"unparsable":           {raw: "http://[::1", wantError: ErrInvalid},
 		"whitespace only":      {raw: "  ", wantError: ErrInvalid},
 		"relative path":        {raw: "/v1/items", wantError: ErrInvalid},
@@ -224,6 +226,8 @@ func TestSetChangesTheNewTypesAndAppliesTheirRules(t *testing.T) {
 	require.PanicsWithError(t, "config: CONFIG_TEST_LOG_LEVEL is not one of debug, info, warn: invalid", func() { Set().Enum("CONFIG_TEST_LOG_LEVEL", "trace") })
 	require.PanicsWithError(t, "config: CONFIG_TEST_BASE_URL has a scheme other than https, http: invalid", func() { Set().URL("CONFIG_TEST_BASE_URL", "ws://set.example") })
 	require.PanicsWithError(t, "config: CONFIG_TEST_BASE_URL is not an absolute URL with scheme and host: invalid", func() { Set().URL("CONFIG_TEST_BASE_URL", "set.example") })
+	require.PanicsWithError(t, "config: CONFIG_TEST_LOG_LEVEL is declared as enum, not as url", func() { Set().URL("CONFIG_TEST_LOG_LEVEL", "nope") })
+	require.PanicsWithError(t, "config: CONFIG_TEST_UNKNOWN was never declared", func() { Set().URL("CONFIG_TEST_UNKNOWN", "nope") })
 	require.Panics(t, func() { Set().Float("CONFIG_TEST_RATIO", math.NaN()) })
 	require.Panics(t, func() { Set().String("CONFIG_TEST_LOG_LEVEL", "info") }, "an Enum is not a String")
 	require.Equal(t, "warn", configuration.LogLevel)
@@ -254,12 +258,66 @@ func TestBindPFlagParsesAndChecksTheNewTypes(t *testing.T) {
 	err := BindPFlag("CONFIG_TEST_LOG_LEVEL", flags.Lookup("log-level"))
 
 	require.ErrorIs(t, err, ErrInvalid)
+	require.EqualError(t, err, `flag --log-level for CONFIG_TEST_LOG_LEVEL: "trace" is not one of debug, info, warn: invalid`)
 	require.Equal(t, typedConfiguration{
 		Timeout:  2 * time.Minute,
 		Ratio:    0.75,
 		BaseURL:  url.URL{Scheme: "https", Host: "flag.example"},
 		LogLevel: "info",
 	}, configuration)
+}
+
+func TestBindPFlagNamesTheFlagWhenARuleRejectsItsValue(t *testing.T) {
+	var configuration typedConfiguration
+	require.NoError(t, LoadConfig(typedValues(&configuration)))
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.Float64("ratio", 0, "")
+	flags.String("base-url", "", "")
+	require.NoError(t, flags.Parse([]string{"--ratio=NaN", "--base-url=ws://user:flag-secret@flag.example"}))
+
+	require.EqualError(t, BindPFlag("CONFIG_TEST_RATIO", flags.Lookup("ratio")), `flag --ratio for CONFIG_TEST_RATIO: "NaN" is not a finite number: invalid`)
+	require.EqualError(t, BindPFlag("CONFIG_TEST_BASE_URL", flags.Lookup("base-url")), `flag --base-url for CONFIG_TEST_BASE_URL: "ws://user:xxxxx@flag.example" has a scheme other than https, http: invalid`)
+}
+
+func TestAURLWithAPortButNoHostIsRejectedEverywhere(t *testing.T) {
+	t.Setenv("CONFIG_TEST_PUBLIC_URL", "https://:8080")
+
+	err := LoadConfig([]Value{
+		URL("CONFIG_TEST_PUBLIC_URL").Schemes("https").NotEmpty(),
+		URL("CONFIG_TEST_CALLBACK_URL").Default("https://:8443"),
+	})
+
+	require.ErrorIs(t, err, ErrInvalid)
+	require.ErrorContains(t, err, `CONFIG_TEST_PUBLIC_URL: "https://:8080" is not an absolute URL with scheme and host`)
+	require.ErrorContains(t, err, `CONFIG_TEST_CALLBACK_URL has an invalid default: "https://:8443" is not an absolute URL`)
+
+	var configuration typedConfiguration
+	require.NoError(t, LoadConfig(typedValues(&configuration)))
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.String("base-url", "", "")
+	require.NoError(t, flags.Parse([]string{"--base-url=http://:9090"}))
+	require.ErrorIs(t, BindPFlag("CONFIG_TEST_BASE_URL", flags.Lookup("base-url")), ErrInvalid)
+	require.Panics(t, func() { Set().URL("CONFIG_TEST_BASE_URL", "http://:9090") })
+	require.Equal(t, "localhost:8080", configuration.BaseURL.Host)
+}
+
+func TestURLErrorsNeverQuoteAPassword(t *testing.T) {
+	t.Setenv("CONFIG_TEST_DATABASE_URL", "postgres://app:pa/ss@db:5432/app")
+	t.Setenv("CONFIG_TEST_BASE_URL", "http://app:s3cr3t@db:5432/app")
+
+	err := LoadConfig([]Value{
+		URL("CONFIG_TEST_DATABASE_URL"),
+		URL("CONFIG_TEST_BASE_URL").Schemes("https"),
+		URL("CONFIG_TEST_CALLBACK_URL").Schemes("https").Default("http://app:d3fault@callback.example"),
+	})
+
+	require.ErrorIs(t, err, ErrInvalid)
+	for _, secret := range []string{"pa/ss", "s3cr3t", "d3fault"} {
+		require.NotContains(t, err.Error(), secret)
+	}
+	require.ErrorContains(t, err, "CONFIG_TEST_DATABASE_URL: the value (unparsable, not shown) is not an absolute URL")
+	require.ErrorContains(t, err, `CONFIG_TEST_BASE_URL: "http://app:xxxxx@db:5432/app" has a scheme other than https`)
+	require.ErrorContains(t, err, `CONFIG_TEST_CALLBACK_URL has an invalid default: "http://app:xxxxx@callback.example" has a scheme other than https`)
 }
 
 func TestPrintShowsTheNewTypesAndRedactsURLPasswords(t *testing.T) {

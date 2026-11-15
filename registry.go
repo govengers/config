@@ -55,9 +55,11 @@ func (r *Registry) Float(key string) float64 {
 	return read[float64](r, key, floatType)
 }
 
-// URL returns a copy of the URL value of key; the zero url.URL when the value is empty.
-func (r *Registry) URL(key string) url.URL {
-	return read[url.URL](r, key, urlType)
+// URL returns a fresh copy of the URL value of key, never nil; a zero url.URL when the value is
+// empty. A pointer, because every url.URL method has a pointer receiver.
+func (r *Registry) URL(key string) *url.URL {
+	value := read[url.URL](r, key, urlType)
+	return &value
 }
 
 // Enum returns the value of key, one of its allowed values.
@@ -85,6 +87,15 @@ func (r *Registry) find(key string, expected valueType) (*entry, error) {
 		return nil, fmt.Errorf("config: %s is declared as %s, not as %s", key, found.declaration.valueType, expected)
 	}
 	return found, nil
+}
+
+// check reports whether key was declared with the expected type, so a Setter that parses text
+// names a wrong key or type before it blames the text.
+func (r *Registry) check(key string, expected valueType) error {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	_, err := r.find(key, expected)
+	return err
 }
 
 func (r *Registry) declarationOf(key string) (declaration, error) {
@@ -169,6 +180,9 @@ func (s *Setter) Float(key string, value float64) {
 
 // URL sets the URL value of key from text, parsed like the environment variable.
 func (s *Setter) URL(key string, value string) {
+	if err := registry.check(key, urlType); err != nil {
+		panic(err)
+	}
 	parsed, err := parseURL(value)
 	if err != nil {
 		panic(fmt.Errorf("config: %s %w", key, err))
