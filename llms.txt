@@ -8,12 +8,12 @@
 
 ## API
 
-- Builders: `String`, `StringArray` (comma-separated), `Bool`, `Int`, `Duration` (Go syntax, no bare numbers), `Float` (finite), `URL` (absolute with scheme and host, `Schemes(...)` allowlist, `Default` takes text, `Into(*url.URL)`), `Enum(name, allowed...)` (exact match).
+- Builders: `String`, `StringArray` (comma-separated), `Bool`, `Int`, `Duration` (Go syntax, no bare numbers), `Float` (finite), `URL` (absolute with scheme and host name, `Schemes(...)` allowlist, `Default` takes text, `Into(*url.URL)`), `Enum(name, allowed...)` (exact match).
 - Methods: `Default` (makes a value optional), `NotEmpty` (String, StringArray, URL), `Sensitive` (masked in Print, never in errors), `Into(&field)`.
 - Load: `LoadConfig(values)` reads `.env` if present; `LoadConfigWithOptions(values, &LoadConfigOptions{DotEnvFiles, DisableDotEnv})`. Failure changes nothing; `errors.Is(err, ErrMissing | ErrInvalid)`.
-- Read: `Get().String|StringArray|Bool|Int|Duration|Float|URL|Enum(key)`; panics on an undeclared key or another type.
+- Read: `Get().String|StringArray|Bool|Int|Duration|Float|URL|Enum(key)`; `URL` returns a `*url.URL` to a fresh copy (never nil); panics on an undeclared key or another type.
 - Tests: `Set().<Type>(key, value)` applies the same checks; `BindPFlag(key, flag)` overrides with a set pflag.
-- Print: `Print()` to stdout, `Fprint(writer)`; URL passwords are redacted, control characters dropped.
+- Print: `Print()` to stdout, `Fprint(writer)`; URL passwords are redacted (in errors too), control characters dropped.
 
 ## Docs
 

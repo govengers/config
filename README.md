@@ -77,7 +77,7 @@ func main() {
 | `config.Int(name)` | an integer | `Default`, `Sensitive`, `Into(*int)` |
 | `config.Duration(name)` | Go duration syntax: `30s`, `5m`, `1h30m`; a number without unit is rejected, except `0` | `Default`, `Sensitive`, `Into(*time.Duration)` |
 | `config.Float(name)` | a number such as `0.25` or `1e3`; NaN and infinities are rejected | `Default`, `Sensitive`, `Into(*float64)` |
-| `config.URL(name)` | an absolute URL with scheme and host; empty is the zero `url.URL` | `Default(string)`, `NotEmpty`, `Schemes(...)`, `Sensitive`, `Into(*url.URL)` |
+| `config.URL(name)` | an absolute URL with scheme and host name; empty is the zero `url.URL` | `Default(string)`, `NotEmpty`, `Schemes(...)`, `Sensitive`, `Into(*url.URL)` |
 | `config.Enum(name, allowed...)` | exactly one of `allowed`, compared with case | `Default`, `Sensitive`, `Into(*string)` |
 
 - A value without `Default` is required.
@@ -85,7 +85,7 @@ func main() {
 - `Sensitive` masks the value in `Print` with a fixed `****`, so not even its length shows, and keeps it out of every error `LoadConfig` and `BindPFlag` return.
 - `Schemes("https", "http")` restricts a URL to those schemes, without case. A URL that needs no host (a Unix socket DSN, `file:`) is a `String`.
 - A default goes through the same checks as the environment value: a URL default that does not parse, an Enum default outside the set or an infinite Float default fails `LoadConfig` even when the variable is set.
-- `Print` replaces the password of a URL that is not `Sensitive` with `xxxxx`. Errors quote a rejected value that is not `Sensitive`, so declare every URL with credentials `Sensitive` anyway.
+- `Print` and errors replace the password of a URL that is not `Sensitive` with `xxxxx`, and an error does not quote a URL that does not parse at all. Declare every URL with credentials `Sensitive` anyway, so the rest is masked too.
 
 `config.Print()` writes the table to stdout (in color), `config.Fprint(writer)` anywhere else and returns the write error. Control characters in values are dropped:
 
@@ -109,7 +109,7 @@ The registry behind `config.Get()` stays available. Its getters panic on a key t
 port := config.Get().Int("PORT")
 ```
 
-The getters are `String`, `StringArray`, `Bool`, `Int`, `Duration`, `Float`, `URL` (a copy) and `Enum`. `config.Set()` changes a loaded value and its `Into` field, for tests, and rejects what `LoadConfig` would reject (`Set().URL` takes text and parses it).
+The getters are `String`, `StringArray`, `Bool`, `Int`, `Duration`, `Float`, `URL` (a `*url.URL` to a fresh copy, never nil) and `Enum`. `config.Set()` changes a loaded value and its `Into` field, for tests, and rejects what `LoadConfig` would reject (`Set().URL` takes text and parses it).
 
 ### Dotenv files
 
