@@ -1,0 +1,22 @@
+# govengers/config
+
+> Environment-based configuration for Go services: every value declared once with a typed builder, loaded and validated at startup with every problem in one error, bound into the application's own struct with Into, printed as a table with secrets masked.
+
+- Module: `github.com/govengers/config/v2`, package `config`, Go 1.26, Apache 2.0.
+- Standards: govengers/standards, `library` profile; the process-wide registry is the declared DES-003 exception (`.govengers.yml`).
+- Rule of thumb: declare and load everything in `main`, copy the struct fields into each component's options; only `main` reads configuration (CFG-006).
+
+## API
+
+- Builders: `String`, `StringArray` (comma-separated), `Bool`, `Int`, `Duration` (Go syntax, no bare numbers), `Float` (finite), `URL` (absolute with scheme and host, `Schemes(...)` allowlist, `Default` takes text, `Into(*url.URL)`), `Enum(name, allowed...)` (exact match).
+- Methods: `Default` (makes a value optional), `NotEmpty` (String, StringArray, URL), `Sensitive` (masked in Print, never in errors), `Into(&field)`.
+- Load: `LoadConfig(values)` reads `.env` if present; `LoadConfigWithOptions(values, &LoadConfigOptions{DotEnvFiles, DisableDotEnv})`. Failure changes nothing; `errors.Is(err, ErrMissing | ErrInvalid)`.
+- Read: `Get().String|StringArray|Bool|Int|Duration|Float|URL|Enum(key)`; panics on an undeclared key or another type.
+- Tests: `Set().<Type>(key, value)` applies the same checks; `BindPFlag(key, flag)` overrides with a set pflag.
+- Print: `Print()` to stdout, `Fprint(writer)`; URL passwords are redacted, control characters dropped.
+
+## Docs
+
+- [README.md](README.md): usage, every builder, dotenv files, flags, migration from v1.
+- [docs/design.md](docs/design.md): decisions C1 onwards.
+- [example_test.go](example_test.go): runnable examples.

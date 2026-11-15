@@ -2,6 +2,8 @@ package config_test
 
 import (
 	"fmt"
+	"net/url"
+	"time"
 
 	"github.com/govengers/config/v2"
 )
@@ -35,4 +37,25 @@ func ExampleGet() {
 
 	fmt.Println(config.Get().String("EXAMPLE_LOG_LEVEL"))
 	// Output: info
+}
+
+func ExampleURL() {
+	type Configuration struct {
+		PublicURL       url.URL
+		ShutdownTimeout time.Duration
+		LogLevel        string
+	}
+	configuration := &Configuration{}
+
+	err := config.LoadConfig([]config.Value{
+		config.URL("EXAMPLE_PUBLIC_URL").Schemes("https", "http").Default("https://tasks.example/app").Into(&configuration.PublicURL),
+		config.Duration("EXAMPLE_SHUTDOWN_TIMEOUT").Default(10 * time.Second).Into(&configuration.ShutdownTimeout),
+		config.Enum("EXAMPLE_LOG_LEVEL", "debug", "info", "warn", "error").Default("info").Into(&configuration.LogLevel),
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(configuration.PublicURL.JoinPath("tasks").String(), configuration.ShutdownTimeout, configuration.LogLevel)
+	// Output: https://tasks.example/app/tasks 10s info
 }

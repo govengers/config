@@ -26,26 +26,32 @@ package main
 
 import (
 	"log"
+	"net/url"
+	"time"
 
 	"github.com/govengers/config/v2"
 )
 
 type Configuration struct {
-	LogLevel       string
-	DevMode        bool
-	Port           int
-	DatabaseURL    string
-	AllowedOrigins []string
+	LogLevel        string
+	DevMode         bool
+	Port            int
+	DatabaseURL     string
+	AllowedOrigins  []string
+	ShutdownTimeout time.Duration
+	PublicURL       url.URL
 }
 
 func loadConfiguration() (*Configuration, error) {
 	configuration := &Configuration{}
 	err := config.LoadConfig([]config.Value{
-		config.String("LOG_LEVEL").NotEmpty().Default("info").Into(&configuration.LogLevel),
+		config.Enum("LOG_LEVEL", "debug", "info", "warn", "error").Default("info").Into(&configuration.LogLevel),
 		config.Bool("DEV_MODE").Default(false).Into(&configuration.DevMode),
 		config.Int("PORT").Default(8080).Into(&configuration.Port),
 		config.String("DATABASE_URL").NotEmpty().Sensitive().Into(&configuration.DatabaseURL),
 		config.StringArray("ALLOWED_ORIGINS").Default([]string{"http://localhost:9000"}).Into(&configuration.AllowedOrigins),
+		config.Duration("SHUTDOWN_TIMEOUT").Default(10 * time.Second).Into(&configuration.ShutdownTimeout),
+		config.URL("PUBLIC_URL").Schemes("https", "http").Default("http://localhost:8080").Into(&configuration.PublicURL),
 	})
 	if err != nil {
 		return nil, err
@@ -69,21 +75,30 @@ func main() {
 | `config.StringArray(name)` | comma-separated; items are trimmed, empty items dropped | `Default`, `NotEmpty`, `Sensitive`, `Into(*[]string)` |
 | `config.Bool(name)` | `true` or `false`, any case | `Default`, `Sensitive`, `Into(*bool)` |
 | `config.Int(name)` | an integer | `Default`, `Sensitive`, `Into(*int)` |
+| `config.Duration(name)` | Go duration syntax: `30s`, `5m`, `1h30m`; a number without unit is rejected, except `0` | `Default`, `Sensitive`, `Into(*time.Duration)` |
+| `config.Float(name)` | a number such as `0.25` or `1e3`; NaN and infinities are rejected | `Default`, `Sensitive`, `Into(*float64)` |
+| `config.URL(name)` | an absolute URL with scheme and host; empty is the zero `url.URL` | `Default(string)`, `NotEmpty`, `Schemes(...)`, `Sensitive`, `Into(*url.URL)` |
+| `config.Enum(name, allowed...)` | exactly one of `allowed`, compared with case | `Default`, `Sensitive`, `Into(*string)` |
 
 - A value without `Default` is required.
 - `NotEmpty` rejects an empty or whitespace-only value and an empty default.
 - `Sensitive` masks the value in `Print` with a fixed `****`, so not even its length shows, and keeps it out of every error `LoadConfig` and `BindPFlag` return.
+- `Schemes("https", "http")` restricts a URL to those schemes, without case. A URL that needs no host (a Unix socket DSN, `file:`) is a `String`.
+- A default goes through the same checks as the environment value: a URL default that does not parse, an Enum default outside the set or an infinite Float default fails `LoadConfig` even when the variable is set.
+- `Print` replaces the password of a URL that is not `Sensitive` with `xxxxx`. Errors quote a rejected value that is not `Sensitive`, so declare every URL with credentials `Sensitive` anyway.
 
 `config.Print()` writes the table to stdout (in color), `config.Fprint(writer)` anywhere else and returns the write error. Control characters in values are dropped:
 
 ```
  Application Configuration
- ENV VAR          TYPE          DEFAULT VALUE          VALUE PROVIDED  CURRENT VALUE
- ALLOWED_ORIGINS  string array  http://localhost:9000  false           http://localhost:9000
- DATABASE_URL     string        -                      true            ****
- DEV_MODE         bool          false                  false           false
- LOG_LEVEL        string        info                   false           info
- PORT             int           8080                   true            9000
+ ENV VAR           TYPE          DEFAULT VALUE          VALUE PROVIDED  CURRENT VALUE
+ ALLOWED_ORIGINS   string array  http://localhost:9000  false           http://localhost:9000
+ DATABASE_URL      string        -                      true            ****
+ DEV_MODE          bool          false                  false           false
+ LOG_LEVEL         enum          info                   false           info
+ PORT              int           8080                   true            9000
+ PUBLIC_URL        url           http://localhost:8080  true            https://tasks.example
+ SHUTDOWN_TIMEOUT  duration      10s                    false           10s
 ```
 
 ### Reading by key
@@ -94,7 +109,7 @@ The registry behind `config.Get()` stays available. Its getters panic on a key t
 port := config.Get().Int("PORT")
 ```
 
-`config.Set()` changes a loaded value and its `Into` field, for tests.
+The getters are `String`, `StringArray`, `Bool`, `Int`, `Duration`, `Float`, `URL` (a copy) and `Enum`. `config.Set()` changes a loaded value and its `Into` field, for tests, and rejects what `LoadConfig` would reject (`Set().URL` takes text and parses it).
 
 ### Dotenv files
 
@@ -124,6 +139,10 @@ if err := config.BindPFlag("PORT", flags.Lookup("port")); err != nil {
 	panic(err)
 }
 ```
+
+## Design
+
+Decisions are recorded in [docs/design.md](docs/design.md).
 
 ## Tests
 
