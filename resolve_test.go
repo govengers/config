@@ -217,7 +217,7 @@ func TestParseStringArray(t *testing.T) {
 }
 
 func TestParseRejectsAnUnknownType(t *testing.T) {
-	_, err := parse(valueType("duration"), "5s")
+	_, err := parse(valueType("complex"), "1+2i")
 
 	require.ErrorIs(t, err, ErrInvalid)
 }

@@ -7,7 +7,7 @@
 // service does anything else.
 package config
 
-// Value is a declared configuration value. Create one with String, StringArray, Bool or Int.
+// Value is a declared configuration value. Create one with String, StringArray, Bool, Int, Duration, Float, URL or Enum.
 type Value interface {
 	describe() *declaration
 }

@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"slices"
 	"sync"
+	"time"
 )
 
 // Registry holds the values LoadConfig loaded. It is safe for concurrent use.
@@ -41,6 +43,26 @@ func (r *Registry) Bool(key string) bool {
 // Int returns the integer value of key.
 func (r *Registry) Int(key string) int {
 	return read[int](r, key, intType)
+}
+
+// Duration returns the duration value of key.
+func (r *Registry) Duration(key string) time.Duration {
+	return read[time.Duration](r, key, durationType)
+}
+
+// Float returns the floating-point value of key.
+func (r *Registry) Float(key string) float64 {
+	return read[float64](r, key, floatType)
+}
+
+// URL returns a copy of the URL value of key; the zero url.URL when the value is empty.
+func (r *Registry) URL(key string) url.URL {
+	return read[url.URL](r, key, urlType)
+}
+
+// Enum returns the value of key, one of its allowed values.
+func (r *Registry) Enum(key string) string {
+	return read[string](r, key, enumType)
 }
 
 func read[T any](source *Registry, key string, expected valueType) T {
@@ -85,8 +107,8 @@ func (r *Registry) replace(entries map[string]*entry) {
 	}
 }
 
-// update sets the value of key and writes it into the bound field. It applies the same NotEmpty
-// rule as LoadConfig, so no path can store an empty value for a NotEmpty declaration.
+// update sets the value of key and writes it into the bound field. It applies the same NotEmpty,
+// Enum, scheme and finite-number rules as LoadConfig, so no path can store a value LoadConfig rejects.
 func (r *Registry) update(key string, expected valueType, value any, provided bool) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -96,6 +118,9 @@ func (r *Registry) update(key string, expected valueType, value any, provided bo
 	}
 	if found.declaration.notEmpty && isEmpty(value) {
 		return fmt.Errorf("config: %s must not be empty: %w", key, ErrInvalid)
+	}
+	if err := checkValue(found.declaration, value); err != nil {
+		return fmt.Errorf("config: %s %w", key, err)
 	}
 	found.value = value
 	found.provided = found.provided || provided
@@ -107,7 +132,7 @@ func (r *Registry) update(key string, expected valueType, value any, provided bo
 type Setter struct{}
 
 // Set returns the Setter. Its methods panic on a key that was never declared, that was declared
-// with another type, or on an empty value for a NotEmpty declaration.
+// with another type, or on a value LoadConfig would reject.
 func Set() *Setter {
 	return &Setter{}
 }
@@ -130,6 +155,30 @@ func (s *Setter) Bool(key string, value bool) {
 // Int sets the integer value of key.
 func (s *Setter) Int(key string, value int) {
 	mustUpdate(key, intType, value)
+}
+
+// Duration sets the duration value of key.
+func (s *Setter) Duration(key string, value time.Duration) {
+	mustUpdate(key, durationType, value)
+}
+
+// Float sets the floating-point value of key.
+func (s *Setter) Float(key string, value float64) {
+	mustUpdate(key, floatType, value)
+}
+
+// URL sets the URL value of key from text, parsed like the environment variable.
+func (s *Setter) URL(key string, value string) {
+	parsed, err := parseURL(value)
+	if err != nil {
+		panic(fmt.Errorf("config: %s %w", key, err))
+	}
+	mustUpdate(key, urlType, parsed)
+}
+
+// Enum sets the value of key, which must be one of its allowed values.
+func (s *Setter) Enum(key string, value string) {
+	mustUpdate(key, enumType, value)
 }
 
 func mustUpdate(key string, expected valueType, value any) {

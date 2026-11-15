@@ -5,7 +5,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"time"
 
 	"github.com/govengers/config/v2"
 	"github.com/spf13/pflag"
@@ -18,6 +20,10 @@ type Configuration struct {
 	DevMode        bool
 	DatabaseURL    string
 	AllowedOrigins []string
+	Timeout        time.Duration
+	SampleRate     float64
+	PublicURL      url.URL
+	LogLevel       string
 }
 
 func main() {
@@ -43,6 +49,10 @@ func run(arguments []string) error {
 		config.Bool("DEV_MODE").Default(false).Into(&configuration.DevMode),
 		config.String("DATABASE_URL").NotEmpty().Sensitive().Into(&configuration.DatabaseURL),
 		config.StringArray("ALLOWED_ORIGINS").Default([]string{"http://localhost"}).Into(&configuration.AllowedOrigins),
+		config.Duration("TIMEOUT").Default(10 * time.Second).Into(&configuration.Timeout),
+		config.Float("SAMPLE_RATE").Default(1).Into(&configuration.SampleRate),
+		config.URL("PUBLIC_URL").Schemes("https", "http").Default("http://localhost:8080").Into(&configuration.PublicURL),
+		config.Enum("LOG_LEVEL", "debug", "info", "warn", "error").Default("info").Into(&configuration.LogLevel),
 	}, &config.LoadConfigOptions{DotEnvFiles: *dotEnvFiles})
 	if err != nil {
 		return err
