@@ -304,15 +304,21 @@ func TestAURLWithAPortButNoHostIsRejectedEverywhere(t *testing.T) {
 func TestURLErrorsNeverQuoteAPassword(t *testing.T) {
 	t.Setenv("CONFIG_TEST_DATABASE_URL", "postgres://app:pa/ss@db:5432/app")
 	t.Setenv("CONFIG_TEST_BASE_URL", "http://app:s3cr3t@db:5432/app")
+	t.Setenv("CONFIG_TEST_NO_SCHEME_URL", "app:n0scheme@db:5432/app")
+	t.Setenv("CONFIG_TEST_ONE_SLASH_URL", "postgres:/app:0neslash@db:5432/app")
+	t.Setenv("CONFIG_TEST_NO_COLON_URL", "postgres//app:n0colon@db:5432/app")
 
 	err := LoadConfig([]Value{
 		URL("CONFIG_TEST_DATABASE_URL"),
 		URL("CONFIG_TEST_BASE_URL").Schemes("https"),
 		URL("CONFIG_TEST_CALLBACK_URL").Schemes("https").Default("http://app:d3fault@callback.example"),
+		URL("CONFIG_TEST_NO_SCHEME_URL"),
+		URL("CONFIG_TEST_ONE_SLASH_URL"),
+		URL("CONFIG_TEST_NO_COLON_URL"),
 	})
 
 	require.ErrorIs(t, err, ErrInvalid)
-	for _, secret := range []string{"pa/ss", "s3cr3t", "d3fault"} {
+	for _, secret := range []string{"pa/ss", "s3cr3t", "d3fault", "n0scheme", "0neslash", "n0colon"} {
 		require.NotContains(t, err.Error(), secret)
 	}
 	require.ErrorContains(t, err, "CONFIG_TEST_DATABASE_URL: the value (unparsable, not shown) is not an absolute URL")

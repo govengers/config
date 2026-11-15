@@ -21,7 +21,7 @@ Each type is a builder of its own (`Duration`, `Float`, `URL`, `Enum` next to `S
 - An empty value is the zero `url.URL`, like an empty `String`; `NotEmpty` rejects it. This keeps the CFG-004 pattern (`X_ENABLED` plus an optional URL with `Default("")`) working.
 - `Schemes(...)` compares lowercased; `url.Parse` lowercases the scheme already. The empty URL is not checked against the allowlist.
 - `Default` takes text, parsed like the environment variable, because a `url.URL` literal is unreadable at the declaration. A default that does not parse fails `LoadConfig`, even when the variable is set (same rule as an empty `NotEmpty` default).
-- The error of `url.Parse` is dropped, because it quotes the value and the value may hold credentials. A URL that is not `Sensitive` never shows its password: `Print` and every error (environment, default, flag) quote `Redacted()`, and a value `url.URL` cannot parse is not quoted at all, because its password cannot be located. Declaring credential URLs `Sensitive` (CFG-002) still masks the rest.
+- The error of `url.Parse` is dropped, because it quotes the value and the value may hold credentials. A URL that is not `Sensitive` never shows its password: `Print` and every error (environment, default, flag) quote `Redacted()`, and a value whose password cannot be located is not quoted at all: `url.Parse` fails, or the text holds an `@` that `url.Parse` did not read as user info (missing scheme or `//`). Declaring credential URLs `Sensitive` (CFG-002) still masks the rest.
 
 ## C5 Enum is a closed, case-sensitive set
 

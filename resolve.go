@@ -240,14 +240,15 @@ func checkValue(current declaration, value any) error {
 
 // describeParseError names the rejected value only when it is not Sensitive, so a malformed secret
 // never reaches the startup error and the logs that collect it. A URL is quoted redacted, like Print
-// shows it, and not at all when url.Parse fails, because then its password cannot be located.
+// shows it, and not at all when its password cannot be located: url.Parse fails, or the text holds
+// an "@" that url.Parse did not read as user info (a missing scheme or "//" leaves it in the path).
 func describeParseError(current declaration, raw string, err error) error {
 	if current.sensitive {
 		return fmt.Errorf("the value (sensitive, not shown) %w", err)
 	}
 	if current.valueType == urlType {
 		parsed, parseErr := url.Parse(raw)
-		if parseErr != nil {
+		if parseErr != nil || (parsed.User == nil && strings.Contains(raw, "@")) {
 			return fmt.Errorf("the value (unparsable, not shown) %w", err)
 		}
 		raw = parsed.Redacted()

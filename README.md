@@ -85,7 +85,7 @@ func main() {
 - `Sensitive` masks the value in `Print` with a fixed `****`, so not even its length shows, and keeps it out of every error `LoadConfig` and `BindPFlag` return.
 - `Schemes("https", "http")` restricts a URL to those schemes, without case. A URL that needs no host (a Unix socket DSN, `file:`) is a `String`.
 - A default goes through the same checks as the environment value: a URL default that does not parse, an Enum default outside the set or an infinite Float default fails `LoadConfig` even when the variable is set.
-- `Print` and errors replace the password of a URL that is not `Sensitive` with `xxxxx`, and an error does not quote a URL that does not parse at all. Declare every URL with credentials `Sensitive` anyway, so the rest is masked too.
+- `Print` and errors replace the password of a URL that is not `Sensitive` with `xxxxx`, and an error does not quote a URL whose password it cannot locate (it does not parse, or it holds an `@` outside the user info, as with a missing scheme). Declare every URL with credentials `Sensitive` anyway, so the rest is masked too.
 
 `config.Print()` writes the table to stdout (in color), `config.Fprint(writer)` anywhere else and returns the write error. Control characters in values are dropped:
 
