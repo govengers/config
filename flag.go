@@ -30,6 +30,9 @@ func parseFlag(current declaration, flag *pflag.Flag) (any, error) {
 	}
 	raw := flag.Value.String()
 	value, err := parse(current.valueType, raw)
+	if err == nil {
+		err = checkValue(current, value)
+	}
 	if err != nil {
 		return nil, describeParseError(current, raw, err)
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -54,7 +55,8 @@ func displayDefault(current declaration) string {
 	if current.defaultValue == nil {
 		return "-"
 	}
-	return display(current, current.defaultValue)
+	value, _ := typedDefault(current) // LoadConfig stores no entry whose default does not parse
+	return display(current, value)
 }
 
 // display formats a value for the table. A sensitive value is masked with a fixed width, so the
@@ -69,9 +71,14 @@ func display(current declaration, value any) string {
 // format renders a value for the table and drops control characters, so a value cannot inject
 // terminal escape sequences or extra lines into logs.
 func format(value any) string {
-	text := fmt.Sprint(value)
-	if items, isList := value.([]string); isList {
-		text = strings.Join(items, ", ")
+	var text string
+	switch typed := value.(type) {
+	case []string:
+		text = strings.Join(typed, ", ")
+	case url.URL:
+		text = typed.Redacted()
+	default:
+		text = fmt.Sprint(value)
 	}
 	return strings.Map(func(character rune) rune {
 		if unicode.IsControl(character) {

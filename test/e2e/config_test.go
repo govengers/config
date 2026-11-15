@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -54,6 +55,10 @@ type configuration struct {
 	DevMode        bool
 	DatabaseURL    string
 	AllowedOrigins []string
+	Timeout        time.Duration
+	SampleRate     float64
+	PublicURL      url.URL
+	LogLevel       string
 }
 
 // runApp starts the app in workingDirectory with only the given environment variables (plus PATH),
@@ -89,6 +94,10 @@ func TestStartsWithEveryValueBoundIntoTheStruct(t *testing.T) {
 		"DEV_MODE":        "true",
 		"DATABASE_URL":    "postgres://billing:secret@db/billing",
 		"ALLOWED_ORIGINS": "https://a.example, https://b.example",
+		"TIMEOUT":         "1m30s",
+		"SAMPLE_RATE":     "0.25",
+		"PUBLIC_URL":      "https://billing.example/app",
+		"LOG_LEVEL":       "debug",
 	})
 
 	require.Equal(t, 0, outcome.exitCode, outcome.stderr)
@@ -98,6 +107,10 @@ func TestStartsWithEveryValueBoundIntoTheStruct(t *testing.T) {
 		DevMode:        true,
 		DatabaseURL:    "postgres://billing:secret@db/billing",
 		AllowedOrigins: []string{"https://a.example", "https://b.example"},
+		Timeout:        90 * time.Second,
+		SampleRate:     0.25,
+		PublicURL:      url.URL{Scheme: "https", Host: "billing.example", Path: "/app"},
+		LogLevel:       "debug",
 	}, outcome.configuration)
 }
 
@@ -110,16 +123,31 @@ func TestDefaultsFillEverythingOptional(t *testing.T) {
 		Port:           8080,
 		DatabaseURL:    "postgres://db",
 		AllowedOrigins: []string{"http://localhost"},
+		Timeout:        10 * time.Second,
+		SampleRate:     1,
+		PublicURL:      url.URL{Scheme: "http", Host: "localhost:8080"},
+		LogLevel:       "info",
 	}, outcome.configuration)
 }
 
 func TestFailsAtStartupListingEveryProblem(t *testing.T) {
-	outcome := runApp(t, t.TempDir(), map[string]string{"PORT": "eighty", "DEV_MODE": "yes"})
+	outcome := runApp(t, t.TempDir(), map[string]string{
+		"PORT":        "eighty",
+		"DEV_MODE":    "yes",
+		"TIMEOUT":     "30",
+		"SAMPLE_RATE": "half",
+		"PUBLIC_URL":  "billing.example",
+		"LOG_LEVEL":   "verbose",
+	})
 
 	require.Equal(t, 1, outcome.exitCode)
 	require.Contains(t, outcome.stderr, "DATABASE_URL is not set and has no default")
 	require.Contains(t, outcome.stderr, `PORT: "eighty" is not an integer`)
 	require.Contains(t, outcome.stderr, `DEV_MODE: "yes" is neither true nor false`)
+	require.Contains(t, outcome.stderr, `TIMEOUT: "30" is not a duration`)
+	require.Contains(t, outcome.stderr, `SAMPLE_RATE: "half" is not a number`)
+	require.Contains(t, outcome.stderr, `PUBLIC_URL: "billing.example" is not an absolute URL`)
+	require.Contains(t, outcome.stderr, `LOG_LEVEL: "verbose" is not one of debug, info, warn, error`)
 	require.Empty(t, outcome.stdout)
 }
 
