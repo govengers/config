@@ -1,16 +1,83 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  go-library:
-    uses: govengers/.github/.github/workflows/go-library.yml@v1
+  # a caller of v1's contract: no new inputs, no actions: read
+  compat:
+    uses: govengers/.github/.github/workflows/go-service.yml@feat/go-service-v2
+    with:
+      image: ghcr.io/${{ github.repository }}
     permissions:
-      contents: write # the badges job pushes test and coverage badges to the badges branch
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+
+  # the same caller on round 1's head, to show the e2e badge failure on a skipped suite
+  old:
+    uses: govengers/.github/.github/workflows/go-service.yml@70f18ea072c6a09e3b890c0868092df7de7b59ca
+    with:
+      image: ghcr.io/${{ github.repository }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+
+  # Bun for a tool only, no test-typescript recipe; a budget
+  featured:
+    uses: govengers/.github/.github/workflows/go-service.yml@feat/go-service-v2
+    with:
+      image: ghcr.io/${{ github.repository }}
+      bun-version: "1.3.3"
+      typescript: false
+      recipes: '["probe-bun"]'
+      budget-warm-seconds: 300
+      budget-cold-seconds: 480
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      actions: read
+
+  empty:
+    uses: govengers/.github/.github/workflows/go-service.yml@feat/go-service-v2
+    with:
+      image: ghcr.io/${{ github.repository }}
+      e2e: false
+      recipes: '[]'
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+
+  blank:
+    uses: govengers/.github/.github/workflows/go-service.yml@feat/go-service-v2
+    with:
+      image: ghcr.io/${{ github.repository }}
+      e2e: false
+      recipes: '[ ]'
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+
+  # the nightly shape
+  full:
+    uses: govengers/.github/.github/workflows/go-service.yml@feat/go-service-v2
+    with:
+      image: ghcr.io/${{ github.repository }}
+      full: true
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
