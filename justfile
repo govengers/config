@@ -41,3 +41,9 @@ probe-env:
     bun --version
     golangci-lint version
     git rev-parse --verify "origin/${BASE_REF}"
+
+test-all:
+    echo "test-all ran"; just test
+
+test-e2e-all:
+    echo "test-e2e-all ran"; just test-e2e
