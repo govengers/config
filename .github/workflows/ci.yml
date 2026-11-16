@@ -9,7 +9,7 @@ permissions:
 jobs:
   # a caller of v1's contract: no new inputs, no actions: read
   compat:
-    uses: govengers/.github/.github/workflows/go-service.yml@feat/go-service-v2
+    uses: govengers/.github/.github/workflows/go-service.yml@test/go-service-perm-probe
     with:
       image: ghcr.io/${{ github.repository }}
       full: false
