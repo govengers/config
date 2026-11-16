@@ -31,3 +31,13 @@ vulncheck:
 
 # Everything CI runs
 check: lint test test-e2e vulncheck
+
+# throwaway: probes of the go-service workflow
+test-typescript:
+    bun --version
+
+probe-env:
+    echo "FULL=$FULL BASE_REF=$BASE_REF"
+    bun --version
+    golangci-lint version
+    git rev-parse --verify "origin/${BASE_REF}"

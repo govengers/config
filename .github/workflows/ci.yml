@@ -1,16 +1,35 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  go-library:
-    uses: govengers/.github/.github/workflows/go-library.yml@v1
+  # a caller of v1's contract: no new inputs, no actions: read
+  compat:
+    uses: govengers/.github/.github/workflows/go-service.yml@feat/go-service-v2
+    with:
+      image: ghcr.io/${{ github.repository }}
+      full: false
     permissions:
-      contents: write # the badges job pushes test and coverage badges to the badges branch
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+
+  featured:
+    uses: govengers/.github/.github/workflows/go-service.yml@feat/go-service-v2
+    with:
+      image: ghcr.io/${{ github.repository }}
+      bun-version: "1.3.3"
+      recipes: '["probe-env", "lint"]'
+      budget-warm-seconds: 300
+      budget-cold-seconds: 480
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      actions: read
