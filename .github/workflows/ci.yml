@@ -15,4 +15,4 @@ jobs:
     permissions:
       contents: write # the badges job pushes test and coverage badges to the badges branch
     with:
-      budget-seconds: 1
+      budget-seconds: 300
