@@ -14,3 +14,5 @@ jobs:
     uses: govengers/.github/.github/workflows/go-library.yml@6239cdb806cd56f580dbc0574de05230f3c4a178 # V1/V15 probe, do not merge
     permissions:
       contents: write # the badges job pushes test and coverage badges to the badges branch
+    with:
+      budget-seconds: 1
